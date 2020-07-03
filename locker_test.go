@@ -8,7 +8,7 @@ import (
 	locker "github.com/x-punch/x-locker"
 )
 
-var l = locker.NewLocker()
+var l = locker.NewLock()
 
 func TestLock(t *testing.T) {
 	wg, n := sync.WaitGroup{}, 3000

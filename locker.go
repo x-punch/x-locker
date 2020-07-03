@@ -4,8 +4,8 @@ import (
 	"sync"
 )
 
-// Locker represents locker which can lock by string
-type Locker struct {
+// Lock represents lock which can lock by string, used in Monolithic application
+type Lock struct {
 	mu     sync.Mutex
 	groups map[string]*mutexGroup
 }
@@ -15,13 +15,13 @@ type mutexGroup struct {
 	mu    sync.Mutex
 }
 
-// NewLocker will create locker instance
-func NewLocker() *Locker {
-	return &Locker{groups: make(map[string]*mutexGroup)}
+// NewLock will create lock instance
+func NewLock() *Lock {
+	return &Lock{groups: make(map[string]*mutexGroup)}
 }
 
 // Lock will create or get mutex group and then lock it by id
-func (l *Locker) Lock(id string) {
+func (l *Lock) Lock(id string) {
 	if len(id) == 0 {
 		panic("lock id cannot by empty")
 	}
@@ -38,7 +38,7 @@ func (l *Locker) Lock(id string) {
 }
 
 // Unlock will get mutex group and unlock it by id
-func (l *Locker) Unlock(id string) {
+func (l *Lock) Unlock(id string) {
 	if len(id) == 0 {
 		panic("lock id cannot by empty")
 	}

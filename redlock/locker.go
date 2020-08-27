@@ -17,6 +17,7 @@ var (
 
 // Locker provides a simple method for creating distributed locks using multiple Redis servers.
 type Locker interface {
+	NewLock(id string, options ...Option) Redlock
 }
 
 type locker struct {

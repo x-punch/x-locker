@@ -16,20 +16,23 @@ var (
 )
 
 // Locker provides a simple method for creating distributed locks using multiple Redis servers.
-type Locker struct {
+type Locker interface {
+}
+
+type locker struct {
 	clients []RedisClient
 }
 
 // New will creates a Redlock locker
-func New(clients []RedisClient) *Locker {
-	return &Locker{
+func New(clients []RedisClient) Locker {
+	return &locker{
 		clients: clients,
 	}
 }
 
 // NewLock returns a new distributed lock with given id.
-func (r *Locker) NewLock(id string, options ...Option) *Redlock {
-	m := &Redlock{
+func (r *locker) NewLock(id string, options ...Option) Redlock {
+	m := &redlock{
 		id:           id,
 		expiration:   DefaultLockExpiration,
 		maxTries:     DefaultMaxRetries,
@@ -47,34 +50,34 @@ func (r *Locker) NewLock(id string, options ...Option) *Redlock {
 
 // An Option configures a mutex.
 type Option interface {
-	Apply(*Redlock)
+	Apply(*redlock)
 }
 
 // OptionFunc is a function that configures a mutex.
-type OptionFunc func(*Redlock)
+type OptionFunc func(*redlock)
 
 // Apply calls f(mutex)
-func (f OptionFunc) Apply(mutex *Redlock) {
+func (f OptionFunc) Apply(mutex *redlock) {
 	f(mutex)
 }
 
 // SetExpiry can be used to set the expiry of a mutex to the given value.
 func SetExpiry(expiry time.Duration) Option {
-	return OptionFunc(func(m *Redlock) {
+	return OptionFunc(func(m *redlock) {
 		m.expiration = expiry
 	})
 }
 
 // SetMaxTries can be used to set the max number of times lock acquire is attempted.
 func SetMaxTries(maxTries int) Option {
-	return OptionFunc(func(m *Redlock) {
+	return OptionFunc(func(m *redlock) {
 		m.maxTries = maxTries
 	})
 }
 
 // SetRetryDelay can be used to set the amount of time to wait between retries.
 func SetRetryDelay(delay time.Duration) Option {
-	return OptionFunc(func(m *Redlock) {
+	return OptionFunc(func(m *redlock) {
 		m.delayFunc = func(tries int) time.Duration {
 			return delay
 		}
@@ -83,21 +86,21 @@ func SetRetryDelay(delay time.Duration) Option {
 
 // SetRetryDelayFunc can be used to override default delay behavior.
 func SetRetryDelayFunc(delayFunc DelayFunc) Option {
-	return OptionFunc(func(m *Redlock) {
+	return OptionFunc(func(m *redlock) {
 		m.delayFunc = delayFunc
 	})
 }
 
 // SetDriftFactor can be used to set the clock drift factor.
 func SetDriftFactor(factor float64) Option {
-	return OptionFunc(func(m *Redlock) {
+	return OptionFunc(func(m *redlock) {
 		m.factor = factor
 	})
 }
 
 // SetGenValueFunc can be used to set the custom value generator.
 func SetGenValueFunc(genValueFunc func() (string, error)) Option {
-	return OptionFunc(func(m *Redlock) {
+	return OptionFunc(func(m *redlock) {
 		m.genValueFunc = genValueFunc
 	})
 }

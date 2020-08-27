@@ -7,11 +7,20 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+var _ Redlock = &redlock{}
+
 // A DelayFunc is used to decide the amount of time to wait between retries.
 type DelayFunc func(tries int) time.Duration
 
 // A Redlock is a distributed mutual exclusion lock.
-type Redlock struct {
+type Redlock interface {
+	Lock() error
+	Unlock() (bool, error)
+	Extend() (bool, error)
+	Valid() (bool, error)
+}
+
+type redlock struct {
 	id         string
 	expiration time.Duration
 
@@ -30,7 +39,7 @@ type Redlock struct {
 }
 
 // Lock will lock the id. In case it returns an error on failure, you may retry to acquire the lock by calling this method again.
-func (l *Redlock) Lock() error {
+func (l *redlock) Lock() error {
 	value, err := l.genValueFunc()
 	if err != nil {
 		return err
@@ -65,7 +74,7 @@ func (l *Redlock) Lock() error {
 }
 
 // Unlock unlocks m and returns the status of unlock.
-func (l *Redlock) Unlock() (bool, error) {
+func (l *redlock) Unlock() (bool, error) {
 	n, err := l.actOnClientsAsync(func(client RedisClient) (bool, error) {
 		return l.release(client, l.value)
 	})
@@ -76,7 +85,7 @@ func (l *Redlock) Unlock() (bool, error) {
 }
 
 // Extend resets the mutex's expiry and returns the status of expiry extension.
-func (l *Redlock) Extend() (bool, error) {
+func (l *redlock) Extend() (bool, error) {
 	n, err := l.actOnClientsAsync(func(client RedisClient) (bool, error) {
 		return l.extend(client, l.value, int(l.expiration/time.Millisecond))
 	})
@@ -87,14 +96,14 @@ func (l *Redlock) Extend() (bool, error) {
 }
 
 // Valid will check liveness for lock
-func (l *Redlock) Valid() (bool, error) {
+func (l *redlock) Valid() (bool, error) {
 	n, err := l.actOnClientsAsync(func(client RedisClient) (bool, error) {
 		return l.valid(client)
 	})
 	return n >= l.quorum, err
 }
 
-func (l *Redlock) valid(client RedisClient) (bool, error) {
+func (l *redlock) valid(client RedisClient) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), l.expiration)
 	defer cancel()
 	result, err := client.Do(ctx, "GET", l.id).Text()
@@ -104,7 +113,7 @@ func (l *Redlock) valid(client RedisClient) (bool, error) {
 	return result == l.value, nil
 }
 
-func (l *Redlock) acquire(client RedisClient, value string) (bool, error) {
+func (l *redlock) acquire(client RedisClient, value string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), l.expiration)
 	defer cancel()
 	result, err := client.Do(ctx, "SET", l.id, value, "NX", "PX", int(l.expiration/time.Millisecond)).Text()
@@ -125,7 +134,7 @@ var deleteScript = redis.NewScript(`
 	end
 `)
 
-func (l *Redlock) release(client RedisClient, value string) (bool, error) {
+func (l *redlock) release(client RedisClient, value string) (bool, error) {
 	status, err := deleteScript.Run(context.TODO(), client, []string{l.id}, value).Int64()
 	return err == nil && status != 0, err
 }
@@ -138,12 +147,12 @@ var expireScript = redis.NewScript(`
 	end
 `)
 
-func (l *Redlock) extend(client RedisClient, value string, expiry int) (bool, error) {
+func (l *redlock) extend(client RedisClient, value string, expiry int) (bool, error) {
 	status, err := expireScript.Run(context.TODO(), client, []string{l.id}, value, expiry).Int64()
 	return err == nil && status != 0, err
 }
 
-func (l *Redlock) actOnClientsAsync(actFn func(RedisClient) (bool, error)) (int, error) {
+func (l *redlock) actOnClientsAsync(actFn func(RedisClient) (bool, error)) (int, error) {
 	type result struct {
 		Success bool
 		Err     error

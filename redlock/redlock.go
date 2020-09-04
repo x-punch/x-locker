@@ -119,7 +119,7 @@ func (l *redlock) acquire(client RedisClient, value string) (bool, error) {
 	result, err := client.Do(ctx, "SET", l.id, value, "NX", "PX", int(l.expiration/time.Millisecond)).Text()
 	if err != nil {
 		if err == redis.Nil {
-			return false, nil
+			return false, ErrAcquireLockFailed
 		}
 		return false, err
 	}

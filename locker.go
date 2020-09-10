@@ -5,7 +5,12 @@ import (
 )
 
 // Lock represents lock which can lock by string, used in Monolithic application
-type Lock struct {
+type Lock interface {
+	Lock(string) error
+	Unlock(string) error
+}
+
+type lock struct {
 	mu     sync.Mutex
 	groups map[string]*mutexGroup
 }
@@ -16,14 +21,14 @@ type mutexGroup struct {
 }
 
 // NewLock will create lock instance
-func NewLock() *Lock {
-	return &Lock{groups: make(map[string]*mutexGroup)}
+func NewLock() Lock {
+	return &lock{groups: make(map[string]*mutexGroup)}
 }
 
 // Lock will create or get mutex group and then lock it by id
-func (l *Lock) Lock(id string) {
+func (l *lock) Lock(id string) error {
 	if len(id) == 0 {
-		panic("lock id cannot by empty")
+		return ErrInvalidLockGroup
 	}
 	l.mu.Lock()
 	g, ok := l.groups[id]
@@ -35,12 +40,13 @@ func (l *Lock) Lock(id string) {
 	}
 	l.mu.Unlock()
 	g.mu.Lock()
+	return nil
 }
 
 // Unlock will get mutex group and unlock it by id
-func (l *Lock) Unlock(id string) {
+func (l *lock) Unlock(id string) error {
 	if len(id) == 0 {
-		panic("lock id cannot by empty")
+		return ErrInvalidLockGroup
 	}
 	l.mu.Lock()
 	if g, ok := l.groups[id]; ok {
@@ -51,6 +57,7 @@ func (l *Lock) Unlock(id string) {
 		l.mu.Unlock()
 		g.mu.Unlock()
 	} else {
-		panic("unlock id not found")
+		return ErrLockGroupNotFound
 	}
+	return nil
 }

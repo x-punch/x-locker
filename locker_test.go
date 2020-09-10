@@ -1,6 +1,9 @@
 package locker_test
 
 import (
+	"errors"
+	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -10,44 +13,52 @@ import (
 
 var l = locker.NewLock()
 
-func TestLock(t *testing.T) {
+func TestLockWithSameGroup(t *testing.T) {
+	wg, n := sync.WaitGroup{}, 3000
+	group := "sameid"
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(g string) {
+			l.Lock(g)
+			defer l.Unlock(g)
+			time.Sleep(time.Millisecond)
+			wg.Done()
+		}(group)
+	}
+	wg.Wait()
+}
+
+func TestLockWithRandomGroup(t *testing.T) {
 	wg, n := sync.WaitGroup{}, 3000
 	wg.Add(n)
 	for i := 0; i < n; i++ {
-		id := "sameid"
-		go func() {
-			l.Lock(id)
+		go func(g string) {
+			l.Lock(g)
+			defer l.Unlock(g)
 			time.Sleep(time.Millisecond)
 			wg.Done()
-			l.Unlock(id)
-		}()
+		}(fmt.Sprintf("%x", rand.Intn(n)))
 	}
 	wg.Wait()
 }
 
 func TestLockEmptyID(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fail()
-		}
-	}()
-	l.Lock("")
+	err := l.Lock("")
+	if err == nil || !errors.Is(err, locker.ErrInvalidLockGroup) {
+		t.Fail()
+	}
 }
 
 func TestUnlockEmptyID(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fail()
-		}
-	}()
-	l.Unlock("")
+	err := l.Unlock("")
+	if err == nil || !errors.Is(err, locker.ErrInvalidLockGroup) {
+		t.Fail()
+	}
 }
 
 func TestUnlockNonexistID(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fail()
-		}
-	}()
-	l.Unlock("id")
+	err := l.Unlock("id")
+	if err == nil || !errors.Is(err, locker.ErrLockGroupNotFound) {
+		t.Fail()
+	}
 }
